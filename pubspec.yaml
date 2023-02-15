@@ -8,13 +8,19 @@ environment:
 
 dependencies:
   path: ^1.8.0
-  shelf: ^1.2.0
-  acme_client: ^1.0.1
-  basic_utils: ^3.7.0
-  coverage: ^1.0.3
-  dependency_validator: ^3.1.0
-  collection: ^1.15.0
+  shelf: ^1.4.0
+  acme_client:
+  basic_utils: ^5.5.0
+  coverage: ^1.6.3
+  dependency_validator: ^3.2.2
+  collection: ^1.17.0
+
+dependency_overrides:
+  acme_client:
+    git:
+      url: https://github.com/NiKoTron/Dart-Acme-Client.git
+      ref: dependencies-update
 
 dev_dependencies:
-  lints: ^1.0.0
+  lints: ^2.0.1
   test: ^1.16.0
