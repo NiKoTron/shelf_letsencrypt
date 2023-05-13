@@ -10,10 +10,18 @@ import 'certs_handler.dart';
 
 /// Let's Encrypt certificate tool.
 class LetsEncrypt {
+  /// Returns `true` if [path] starts with `/.well-known/`.
+  static bool isWellknownPath(String path) => path.startsWith('/.well-known/');
+
   /// Returns `true` if [path] is an `ACME` request path.
   ///
   /// Usually a path starting with: `/.well-known/`
-  static bool isACMEPath(String path) => path.startsWith('/.well-known/');
+  static bool isACMEPath(String path) =>
+      path.startsWith('/.well-known/acme-challenge/');
+
+  /// Returns `true` if [path] is a self check path.
+  static bool isSelfCheckPath(String path) =>
+      path.startsWith('/.well-known/check/');
 
   /// The certificate handler to use.
   final CertificatesHandler certificatesHandler;
@@ -196,10 +204,10 @@ class LetsEncrypt {
         var schema = url.substring(0, idx);
         var rest = url.substring(idx);
         rest = rest.replaceFirst(RegExp(r'^/+'), '');
-        url = '$schema://' + rest.replaceAll('//', '/');
+        url = '$schema://${rest.replaceAll('//', '/')}';
       } else {
         var rest = url.replaceFirst(RegExp(r'^/+'), '');
-        url = 'http://' + rest.replaceAll('//', '/');
+        url = 'http://${rest.replaceAll('//', '/')}';
       }
     }
 
@@ -211,6 +219,13 @@ class LetsEncrypt {
 
     var match = content.trim() == challengeData.fileContent;
     return match;
+  }
+
+  /// A helper method to process a self check [Request].
+  ///
+  /// See [isSelfCheckPath].
+  Response processSelfCheckRequest(Request request) {
+    return Response.ok('OK');
   }
 
   /// A helper method to process an ACME `shelf` [Request].
@@ -252,18 +267,24 @@ class LetsEncrypt {
         'Starting server> port: $port ; domainAndEmails: $domainsAndEmails');
 
     FutureOr<Response> handlerWithChallenge(r) {
-      if (LetsEncrypt.isACMEPath(r.requestedUri.path)) {
-        return processACMEChallengeRequest(r);
-      } else {
-        return handler(r);
+      final path = r.requestedUri.path;
+
+      if (LetsEncrypt.isSelfCheckPath(path)) {
+        if (LetsEncrypt.isACMEPath(path)) {
+          return processACMEChallengeRequest(r);
+        } else if (LetsEncrypt.isSelfCheckPath(path)) {
+          return processSelfCheckRequest(r);
+        }
       }
+
+      return handler(r);
     }
 
     var server = await serve(handlerWithChallenge, bindingAddress, port,
         backlog: backlog, shared: shared);
 
-    Future<HttpServer> _startSecureServer(SecurityContext securityContext) {
-      return serve(handler, bindingAddress, securePort,
+    Future<HttpServer> startSecureServer(SecurityContext securityContext) {
+      return serve(handlerWithChallenge, bindingAddress, securePort,
           securityContext: securityContext, backlog: backlog, shared: shared);
     }
 
@@ -307,9 +328,9 @@ class LetsEncrypt {
       }
 
       _logMsg('Starting secure server> port: $securePort ; domains: $domains');
-      secureServer = await _startSecureServer(securityContext);
+      secureServer = await startSecureServer(securityContext);
     } else {
-      secureServer = await _startSecureServer(securityContext);
+      secureServer = await startSecureServer(securityContext);
 
       if (checkCertificate) {
         _logMsg('Checking certificate for: $domains');
@@ -346,7 +367,7 @@ class LetsEncrypt {
 
           _logMsg('Restarting secure server...');
           await secureServer.close(force: true);
-          secureServer = await _startSecureServer(securityContext);
+          secureServer = await startSecureServer(securityContext);
         }
       }
     }
@@ -412,7 +433,8 @@ class LetsEncrypt {
       retryInterval = Duration(milliseconds: 10);
     }
 
-    var domainURL = Uri.parse('https://$domain/');
+    var domainURL =
+        Uri.parse('https://$domain/.well-known/check/${DateTime.now()}');
 
     for (var i = 0; i < maxRetries; ++i) {
       if (i > 0) {
