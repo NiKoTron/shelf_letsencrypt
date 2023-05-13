@@ -9,8 +9,8 @@ environment:
 dependencies:
   path: ^1.8.3
   shelf: ^1.4.0
-  acme_client: ^1.1.0
-  basic_utils: ^3.9.4
+  acme_client:
+  basic_utils: ^5.5.0
   coverage: ^1.6.3
   collection: ^1.16.0
 
